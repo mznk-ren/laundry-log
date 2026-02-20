@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>洗濯ログ</title>
+
+<style>
+
+body {
+  margin: 0;
+  font-family: sans-serif;
+  background: #f2f5fb;
+  height: 100vh;
+  overflow: hidden;
+}
+
+header {
+  position: sticky;
+  top: 0;
+  z-index: 200;
+
+  background: #fff;
+  padding: 12px;
+  font-size: 20px;
+  font-weight: bold;
+  border-bottom: 1px solid #ddd;
+}
+
+#categoryBar {
+  position: sticky;
+  top: 50px; /* ← ヘッダーの高さ分 */
+  z-index: 150;
+
+  display: flex;
+  gap: 8px;
+  padding: 10px;
+  overflow-x: auto;
+  background: #e8f0ff;
+}
+
+.category {
+  padding: 6px 14px;
+  background: #fff;
+  border-radius: 999px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.category.active {
+  background: #4caf50;
+  color: white;
+}
+
+main {
+  padding: 12px;
+  height: calc(100vh - 110px);
+  overflow-y: auto;
+  padding-bottom: 100px; /* ← これ追加 */
+}
+
+input, select, button {
+  width: 100%;
+  padding: 10px;
+  margin-top: 8px;
+  font-size: 16px;
+}
+
+button {
+  background: #4caf50;
+  color: white;
+  border: none;
+  border-radius: 6px;
+}
+
+.deleteBtn {
+  background: #e74c3c;
+  font-size: 12px;
+  padding: 6px 10px;
+  width: auto;
+}
+
+.item {
+  background: #fff;
+  border-radius: 8px;
+  padding: 12px;
+  margin: 8px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+}
+
+.item-name {
+  flex: 1;
+}
+
+.item small {
+  font-size: 12px;
+  color: #666;
+}
+#fab {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+
+  font-size: 28px;
+  background: #4caf50;
+  color: white;
+  border: none;
+
+  box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+  z-index: 300;
+}
+
+#fab:active {
+  transform: scale(0.95);
+}
+
+/* モーダル背景 */
+#formModal {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 40%;
+  background: rgba(0,0,0,0.3);
+
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+
+  transition: 0.3s;
+  z-index: 400;
+}
+
+/* 非表示 */
+.hidden {
+  transform: translateY(100%);
+}
+
+/* 中身 */
+.modalContent {
+  background: white;
+  width: 100%;
+  padding: 20px;
+  border-radius: 20px 20px 0 0;
+}
+
+</style>
+</head>
+
+<body>
+
+<header>洗濯ログ</header>
+<div id="categoryBar"></div>
+
+<main>
+<div id="formModal" class="hidden" onclick="closeModal(event)">
+  <div class="modalContent" onclick="event.stopPropagation()">
+    <h3>アイテム追加</h3>
+    <input id="itemInput" placeholder="例：毛布">
+    <select id="categorySelect"></select>
+    <button onclick="saveFromModal()">保存</button>
+  </div>
+</div>
+
+  <hr>
+  <div id="itemList"></div>
+
+</main>
+
+<script>
+
+let selectedCategory = "ALL";
+
+/* ===== 保存 ===== */
+
+function loadCategories() {
+  return JSON.parse(localStorage.getItem("categories"))
+    || ["寝具", "衣類", "学校", "その他"];
+}
+
+function saveCategories(c) {
+  localStorage.setItem("categories", JSON.stringify(c));
+}
+
+function loadItems() {
+  return JSON.parse(localStorage.getItem("items")) || [];
+}
+
+function saveItems(i) {
+  localStorage.setItem("items", JSON.stringify(i));
+}
+
+/* ===== 描画 ===== */
+
+function render() {
+
+  const categories = loadCategories();
+  const items = loadItems();
+
+  const bar = document.getElementById("categoryBar");
+  const select = document.getElementById("categorySelect");
+  const list = document.getElementById("itemList");
+
+  bar.innerHTML = "";
+  select.innerHTML = "";
+  list.innerHTML = "";
+
+  /* ---- select（全カテゴリ表示） ---- */
+  categories.forEach(cat => {
+    const opt = document.createElement("option");
+    opt.value = cat;
+    opt.textContent = cat;
+    select.appendChild(opt);
+   
+  });
+
+  /* ---- カテゴリバー ---- */
+
+  // 全部ボタン
+  const all = document.createElement("div");
+  all.className = "category";
+  all.textContent = "全部";
+  if (selectedCategory === "ALL") {
+    all.classList.add("active");
+  }
+  all.onclick = () => {
+    selectedCategory = "ALL";
+    render();
+  };
+  bar.appendChild(all);
+
+  // ＋ボタン
+  const add = document.createElement("div");
+  add.className = "category";
+  add.textContent = "＋";
+  add.onclick = () => {
+    const name = prompt("新しいカテゴリ名");
+    if (!name) return;
+    const categories = loadCategories();
+    if (!categories.includes(name)) {
+      categories.push(name);
+      saveCategories(categories);
+      selectedCategory = name;
+      render();
+    }
+  };
+  bar.appendChild(add);
+
+  // カテゴリ一覧（常に全部表示）
+  categories.forEach(cat => {
+    const c = document.createElement("div");
+    c.className = "category";
+    c.textContent = cat;
+    if (selectedCategory === cat) {
+      c.classList.add("active");
+    }
+    c.onclick = () => {
+      selectedCategory = cat;
+      render();
+    };
+    bar.appendChild(c);
+  });
+
+  /* ---- 表示するカテゴリ決定 ---- */
+
+  const visibleCategories =
+    selectedCategory === "ALL"
+      ? categories
+      : [selectedCategory];
+
+  /* ---- アイテム描画 ---- */
+
+  visibleCategories.forEach(cat => {
+
+    const catItems = items.filter(i => i.category === cat);
+
+    if (catItems.length) {
+
+      const h3 = document.createElement("h3");
+      h3.textContent = cat;
+      list.appendChild(h3);
+
+      catItems.forEach(item => {
+
+        const div = document.createElement("div");
+        div.className = "item";
+
+        div.innerHTML = `
+          <div class="item-name">
+            ${item.name}<br>
+            <small>${item.date}</small>
+          </div>
+
+          <button onclick="washItem(${item.id})">
+            洗った！
+          </button>
+
+          <button class="deleteBtn" onclick="deleteItem(${item.id})">
+            削除
+          </button>
+        `;
+
+        list.appendChild(div);
+
+      });
+
+    }
+
+  });
+
+}
+
+/* ===== 操作 ===== */
+
+function addItem() {
+  const name = itemInput.value.trim();
+  if (!name) return;
+
+  const items = loadItems();
+  items.push({
+    id: Date.now(),
+    name,
+    category: categorySelect.value,
+    date: new Date().toLocaleDateString()
+  });
+
+  saveItems(items);
+  itemInput.value = "";
+  render();
+}
+
+function washItem(id) {
+  const items = loadItems();
+  const item = items.find(i => i.id === id);
+  if (!item) return;
+
+  item.date = new Date().toLocaleDateString();
+  saveItems(items);
+  render();
+}
+
+function deleteItem(id) {
+  const items = loadItems().filter(i => i.id !== id);
+  saveItems(items);
+  render();
+}
+
+function addCategory() {
+  const name = newCategory.value.trim();
+  if (!name) return;
+
+  const categories = loadCategories();
+  if (!categories.includes(name)) {
+    categories.push(name);
+    saveCategories(categories);
+  }
+
+  newCategory.value = "";
+  render();
+}
+
+render();
+
+function openModal() {
+  document.getElementById("formModal").classList.remove("hidden");
+}
+
+function closeModal(e) {
+  if (!e || e.target.id === "formModal") {
+    document.getElementById("formModal").classList.add("hidden");
+  }
+}
+
+function saveFromModal() {
+  const name = itemInput.value.trim();
+  if (!name) return;
+
+  const items = loadItems();
+  items.push({
+    id: Date.now(),
+    name,
+    category: categorySelect.value,
+    date: new Date().toLocaleDateString()
+  });
+
+  saveItems(items);
+  itemInput.value = "";
+  closeModal();
+  render();
+}
+
+</script>
+<button id="fab" onclick="openModal()">＋</button>
+</body>
+</html>
