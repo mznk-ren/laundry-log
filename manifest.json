@@ -3,7 +3,7 @@
   "short_name": "洗濯",
   "start_url": "./",
   "display": "standalone",
-  "background_color": "#f2f5fb",
+   "background_color": "#f2f5fb",
   "theme_color": "#4caf50",
   "icons": [
     {
@@ -17,4 +17,5 @@
       "type": "image/png"
     }
   ]
+
 }
